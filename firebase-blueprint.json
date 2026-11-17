@@ -1,0 +1,325 @@
+{
+  "entities": {
+    "Committee": {
+      "title": "Committee",
+      "description": "One of the 17 official J.M. Patel College committees.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "maxLength": 64,
+          "description": "Canonical committee slug identifier."
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Display name of the committee."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 600,
+          "description": "Committee mandate and description."
+        },
+        "department_group": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Academic or co-curricular grouping."
+        },
+        "logo_url": {
+          "type": "string",
+          "maxLength": 900000,
+          "description": "Optional committee emblem URL or encoded logo."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64,
+          "description": "Server creation timestamp."
+        }
+      },
+      "required": ["id", "name", "description", "created_at"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Role-based user account profile for Principal, Committee Members, and Students.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "maxLength": 128,
+          "description": "Firebase Auth UID."
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Full display name."
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 160,
+          "description": "Real email address for Principal, Committee Members, and Students."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "committee", "committee_member", "student"],
+          "maxLength": 32,
+          "description": "Access role."
+        },
+        "committeeId": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "maxLength": 64,
+          "description": "Assigned committee ID for committee accounts."
+        },
+        "committee_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "maxLength": 64,
+          "description": "Legacy alias for assigned committee ID."
+        },
+        "is_active": {
+          "type": "boolean",
+          "description": "Whether the account is active."
+        },
+        "must_change_password": {
+          "type": "boolean",
+          "description": "Requires password update on first login."
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64,
+          "description": "Server creation timestamp."
+        }
+      },
+      "required": ["uid", "name", "role", "is_active", "must_change_password", "created_at"]
+    },
+    "AdminLock": {
+      "title": "AdminLock",
+      "description": "Trusted admin role registry and single-principal bootstrap marker.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "maxLength": 128
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": ["uid", "created_at"]
+    },
+    "Notice": {
+      "title": "Notice",
+      "description": "Official circular or notice published by a committee or Principal.",
+      "type": "object",
+      "properties": {
+        "committee_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "maxLength": 64
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "file_url": {
+          "type": "string",
+          "maxLength": 900000
+        },
+        "file_name": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "created_by": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "maxLength": 128
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": ["committee_id", "title", "description", "created_by", "created_at"]
+    },
+    "EventItem": {
+      "title": "EventItem",
+      "description": "Scheduled committee workshop, seminar, fest, or campus drive.",
+      "type": "object",
+      "properties": {
+        "committee_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "maxLength": 64
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "maxLength": 16
+        },
+        "venue": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "created_by": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "maxLength": 128
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": ["committee_id", "title", "description", "date", "venue", "created_by", "created_at"]
+    },
+    "GalleryItem": {
+      "title": "GalleryItem",
+      "description": "Committee event photograph with caption.",
+      "type": "object",
+      "properties": {
+        "committee_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "maxLength": 64
+        },
+        "image_url": {
+          "type": "string",
+          "maxLength": 900000
+        },
+        "caption": {
+          "type": "string",
+          "maxLength": 400
+        },
+        "created_by": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "maxLength": 128
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": ["committee_id", "image_url", "caption", "created_by", "created_at"]
+    },
+    "DocumentItem": {
+      "title": "DocumentItem",
+      "description": "Private internal committee document.",
+      "type": "object",
+      "properties": {
+        "committee_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "maxLength": 64
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "file_url": {
+          "type": "string",
+          "maxLength": 900000
+        },
+        "file_name": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "created_by": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "maxLength": 128
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": ["committee_id", "title", "file_url", "created_by", "created_at"]
+    },
+    "LoginLog": {
+      "title": "LoginLog",
+      "description": "Audit log entry created on every successful user sign-in.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_-]+$",
+          "maxLength": 128
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "committee", "committee_member", "student"],
+          "maxLength": 32
+        },
+        "committeeId": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "maxLength": 64
+        },
+        "loggedInAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": ["userId", "role", "loggedInAt"]
+    }
+  },
+  "firestore": {
+    "/committees/{committeeId}": {
+      "schema": { "$ref": "#/entities/Committee" },
+      "description": "Directory of the 17 J.M. Patel College committees."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profiles keyed by Firebase Auth UID."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminLock" },
+      "description": "Trusted admin UID registry."
+    },
+    "/notices/{noticeId}": {
+      "schema": { "$ref": "#/entities/Notice" },
+      "description": "Committee notices and circulars."
+    },
+    "/events/{eventId}": {
+      "schema": { "$ref": "#/entities/EventItem" },
+      "description": "Committee scheduled events."
+    },
+    "/gallery/{galleryId}": {
+      "schema": { "$ref": "#/entities/GalleryItem" },
+      "description": "Committee event photo gallery."
+    },
+    "/documents/{documentId}": {
+      "schema": { "$ref": "#/entities/DocumentItem" },
+      "description": "Private committee documents."
+    },
+    "/loginLogs/{logId}": {
+      "schema": { "$ref": "#/entities/LoginLog" },
+      "description": "Authentication audit trail written on every login."
+    }
+  }
+}

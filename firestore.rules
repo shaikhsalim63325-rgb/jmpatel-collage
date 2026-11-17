@@ -1,0 +1,373 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Global Validation Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isVerifiedAdminEmail() {
+      return isSignedIn()
+        && request.auth.token.email == 'shaikhsalim63325@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && (
+          isVerifiedAdminEmail()
+          || exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+          || (hasUserDoc() && userDoc().role == 'admin' && isActiveUser())
+        );
+    }
+
+    function hasUserDoc() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isActiveUser() {
+      return hasUserDoc()
+        && (!('is_active' in userDoc()) || userDoc().is_active == true)
+        && (!('isActive' in userDoc()) || userDoc().isActive == true);
+    }
+
+    function matchesUserCommittee(data) {
+      return ('committee_id' in data && (('committee_id' in userDoc() && data.committee_id == userDoc().committee_id) || ('committeeId' in userDoc() && data.committee_id == userDoc().committeeId)))
+        || ('committeeId' in data && (('committee_id' in userDoc() && data.committeeId == userDoc().committee_id) || ('committeeId' in userDoc() && data.committeeId == userDoc().committeeId)));
+    }
+
+    function isActiveCommitteeMember(committeeId) {
+      return isActiveUser()
+        && userDoc().role in ['committee', 'committee_member']
+        && (
+          ('committee_id' in userDoc() && userDoc().committee_id == committeeId)
+          || ('committeeId' in userDoc() && userDoc().committeeId == committeeId)
+        );
+    }
+
+    function canReadPublicCommitteeItem(data) {
+      return !isSignedIn()
+        || isAdmin()
+        || (
+          isActiveUser()
+          && (
+            userDoc().role == 'student'
+            || (userDoc().role in ['committee', 'committee_member'] && matchesUserCommittee(data))
+          )
+        );
+    }
+
+    function isValidBootstrapAuth() {
+      return isSignedIn()
+        && request.auth.token.email is string
+        && request.auth.token.email.size() >= 3;
+    }
+
+    // 3. Entity Validation Helpers (Strict Keys, Types, Lengths, Patterns, Temporal Integrity)
+
+    function isValidCommittee(data) {
+      return data.keys().hasAll(['id', 'name', 'description', 'created_at'])
+        && data.keys().hasOnly(['id', 'name', 'description', 'department_group', 'logo_url', 'created_at'])
+        && data.id is string && data.id.size() >= 1 && data.id.size() <= 64 && data.id.matches('^[a-z0-9-]+$')
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 80
+        && data.description is string && data.description.size() <= 600
+        && (!('department_group' in data) || data.department_group == null || (data.department_group is string && data.department_group.size() <= 80))
+        && (!('logo_url' in data) || data.logo_url == null || (data.logo_url is string && data.logo_url.size() <= 900000))
+        && data.created_at is timestamp;
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'name', 'role', 'is_active', 'must_change_password', 'created_at'])
+        && data.keys().hasOnly(['uid', 'name', 'email', 'role', 'committee_id', 'committeeId', 'is_active', 'must_change_password', 'created_at'])
+        && data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && (!('email' in data) || data.email == null || (data.email is string && data.email.size() <= 160))
+        && data.role is string && data.role in ['admin', 'committee', 'committee_member', 'student'] && data.role.size() <= 32
+        && (!('committee_id' in data) || data.committee_id == null || (data.committee_id is string && data.committee_id.size() >= 1 && data.committee_id.size() <= 64 && data.committee_id.matches('^[a-z0-9-]+$')))
+        && (!('committeeId' in data) || data.committeeId == null || (data.committeeId is string && data.committeeId.size() >= 1 && data.committeeId.size() <= 64 && data.committeeId.matches('^[a-z0-9-]+$')))
+        && data.is_active is bool
+        && data.must_change_password is bool
+        && data.created_at is timestamp;
+    }
+
+    function isValidAdminLock(data) {
+      return data.keys().hasAll(['uid', 'created_at'])
+        && data.keys().hasOnly(['uid', 'created_at'])
+        && data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 && data.uid.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.created_at is timestamp;
+    }
+
+    function isValidNotice(data) {
+      return data.keys().hasAll(['committee_id', 'title', 'description', 'created_by', 'created_at'])
+        && data.keys().hasOnly(['committee_id', 'title', 'description', 'file_url', 'file_name', 'created_by', 'created_at'])
+        && data.committee_id is string && data.committee_id.size() >= 1 && data.committee_id.size() <= 64 && data.committee_id.matches('^[a-z0-9-]+$')
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.description is string && data.description.size() <= 4000
+        && (!('file_url' in data) || data.file_url == null || (data.file_url is string && data.file_url.size() <= 900000))
+        && (!('file_name' in data) || data.file_name == null || (data.file_name is string && data.file_name.size() <= 200))
+        && data.created_by is string && data.created_by.size() >= 1 && data.created_by.size() <= 128 && data.created_by.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.created_at is timestamp;
+    }
+
+    function isValidEvent(data) {
+      return data.keys().hasAll(['committee_id', 'title', 'description', 'date', 'venue', 'created_by', 'created_at'])
+        && data.keys().hasOnly(['committee_id', 'title', 'description', 'date', 'venue', 'created_by', 'created_at'])
+        && data.committee_id is string && data.committee_id.size() >= 1 && data.committee_id.size() <= 64 && data.committee_id.matches('^[a-z0-9-]+$')
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.description is string && data.description.size() <= 4000
+        && data.date is string && data.date.size() == 10 && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.venue is string && data.venue.size() <= 200
+        && data.created_by is string && data.created_by.size() >= 1 && data.created_by.size() <= 128 && data.created_by.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.created_at is timestamp;
+    }
+
+    function isValidGallery(data) {
+      return data.keys().hasAll(['committee_id', 'image_url', 'caption', 'created_by', 'created_at'])
+        && data.keys().hasOnly(['committee_id', 'image_url', 'caption', 'created_by', 'created_at'])
+        && data.committee_id is string && data.committee_id.size() >= 1 && data.committee_id.size() <= 64 && data.committee_id.matches('^[a-z0-9-]+$')
+        && data.image_url is string && data.image_url.size() >= 1 && data.image_url.size() <= 900000
+        && data.caption is string && data.caption.size() <= 400
+        && data.created_by is string && data.created_by.size() >= 1 && data.created_by.size() <= 128 && data.created_by.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.created_at is timestamp;
+    }
+
+    function isValidDocument(data) {
+      return data.keys().hasAll(['committee_id', 'title', 'file_url', 'created_by', 'created_at'])
+        && data.keys().hasOnly(['committee_id', 'title', 'file_url', 'file_name', 'created_by', 'created_at'])
+        && data.committee_id is string && data.committee_id.size() >= 1 && data.committee_id.size() <= 64 && data.committee_id.matches('^[a-z0-9-]+$')
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.file_url is string && data.file_url.size() >= 1 && data.file_url.size() <= 900000
+        && (!('file_name' in data) || data.file_name == null || (data.file_name is string && data.file_name.size() <= 200))
+        && data.created_by is string && data.created_by.size() >= 1 && data.created_by.size() <= 128 && data.created_by.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.created_at is timestamp;
+    }
+
+    function isValidLoginLog(data) {
+      return data.keys().hasAll(['userId', 'role', 'loggedInAt'])
+        && data.keys().hasOnly(['userId', 'role', 'committeeId', 'loggedInAt'])
+        && data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 && data.userId.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.role is string && data.role in ['admin', 'committee', 'committee_member', 'student'] && data.role.size() <= 32
+        && (!('committeeId' in data) || data.committeeId == null || (data.committeeId is string && data.committeeId.size() <= 64 && data.committeeId.matches('^[a-z0-9-]+$')))
+        && data.loggedInAt is timestamp;
+    }
+
+    // 4. Collection Rules
+
+    // Connection test document
+    match /test/connection {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
+    // Committees (Publicly readable catalog; ONLY Admin can create, edit, or delete)
+    match /committees/{committeeId} {
+      allow get: if isValidId(committeeId);
+      allow list: if true;
+      allow create: if isValidId(committeeId)
+        && isValidCommittee(incoming())
+        && incoming().id == committeeId
+        && incoming().created_at == request.time
+        && isAdmin();
+      allow update: if isValidId(committeeId)
+        && isValidCommittee(incoming())
+        && isAdmin()
+        && incoming().id == existing().id
+        && incoming().created_at == existing().created_at
+        && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'description', 'department_group', 'logo_url']);
+      allow delete: if isValidId(committeeId) && isAdmin();
+    }
+
+    // Admins registry & single-principal bootstrap lock
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && (isOwner(adminId) || isAdmin());
+      allow list: if false;
+      allow create: if isValidId(adminId)
+        && isValidAdminLock(incoming())
+        && incoming().created_at == request.time
+        && (
+          isAdmin()
+          || (
+            isValidBootstrapAuth()
+            && !exists(/databases/$(database)/documents/admins/principal_lock)
+            && (adminId == request.auth.uid || adminId == 'principal_lock')
+            && incoming().uid == request.auth.uid
+            && existsAfter(/databases/$(database)/documents/admins/principal_lock)
+          )
+        );
+      allow update, delete: if isValidId(adminId) && isAdmin();
+    }
+
+    // Users (PII isolated to owner or Principal Admin; strict anti-role-escalation)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == userId
+        && incoming().created_at == request.time
+        && (
+          (isAdmin() && incoming().role in ['admin', 'committee', 'committee_member', 'student'])
+          || (
+            isOwner(userId)
+            && isValidBootstrapAuth()
+            && incoming().role == 'admin'
+            && incoming().is_active == true
+            && !exists(/databases/$(database)/documents/admins/principal_lock)
+            && existsAfter(/databases/$(database)/documents/admins/principal_lock)
+          )
+          || (
+            isOwner(userId)
+            && incoming().role == 'student'
+            && incoming().is_active == true
+            && incoming().must_change_password == false
+            && (!('committee_id' in incoming()) || incoming().committee_id == null)
+            && (!('committeeId' in incoming()) || incoming().committeeId == null)
+          )
+        );
+      allow update: if isValidId(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == existing().uid
+        && incoming().created_at == existing().created_at
+        && (
+          (
+            isAdmin()
+            && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'is_active', 'must_change_password', 'committee_id', 'committeeId'])
+          )
+          || (
+            isOwner(userId)
+            && existing().is_active == true
+            && incoming().role == existing().role
+            && incoming().is_active == existing().is_active
+            && incoming().diff(existing()).affectedKeys().hasOnly(['must_change_password', 'name'])
+          )
+        );
+      allow delete: if isValidId(userId) && isAdmin() && userId != request.auth.uid;
+    }
+
+    // Notices (Public / Active Students read all; Committee members only own; Admin all)
+    match /notices/{noticeId} {
+      allow get: if isValidId(noticeId) && canReadPublicCommitteeItem(existing());
+      allow list: if canReadPublicCommitteeItem(resource.data);
+      allow create: if isValidId(noticeId)
+        && isValidNotice(incoming())
+        && incoming().created_by == request.auth.uid
+        && incoming().created_at == request.time
+        && exists(/databases/$(database)/documents/committees/$(incoming().committee_id))
+        && (isAdmin() || isActiveCommitteeMember(incoming().committee_id));
+      allow update: if isValidId(noticeId)
+        && isValidNotice(incoming())
+        && incoming().committee_id == existing().committee_id
+        && incoming().created_by == existing().created_by
+        && incoming().created_at == existing().created_at
+        && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'file_url', 'file_name'])
+        && (isAdmin() || isActiveCommitteeMember(existing().committee_id));
+      allow delete: if isValidId(noticeId)
+        && (isAdmin() || isActiveCommitteeMember(existing().committee_id));
+    }
+
+    // Events
+    match /events/{eventId} {
+      allow get: if isValidId(eventId) && canReadPublicCommitteeItem(existing());
+      allow list: if canReadPublicCommitteeItem(resource.data);
+      allow create: if isValidId(eventId)
+        && isValidEvent(incoming())
+        && incoming().created_by == request.auth.uid
+        && incoming().created_at == request.time
+        && exists(/databases/$(database)/documents/committees/$(incoming().committee_id))
+        && (isAdmin() || isActiveCommitteeMember(incoming().committee_id));
+      allow update: if isValidId(eventId)
+        && isValidEvent(incoming())
+        && incoming().committee_id == existing().committee_id
+        && incoming().created_by == existing().created_by
+        && incoming().created_at == existing().created_at
+        && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'date', 'venue'])
+        && (isAdmin() || isActiveCommitteeMember(existing().committee_id));
+      allow delete: if isValidId(eventId)
+        && (isAdmin() || isActiveCommitteeMember(existing().committee_id));
+    }
+
+    // Gallery
+    match /gallery/{galleryId} {
+      allow get: if isValidId(galleryId) && canReadPublicCommitteeItem(existing());
+      allow list: if canReadPublicCommitteeItem(resource.data);
+      allow create: if isValidId(galleryId)
+        && isValidGallery(incoming())
+        && incoming().created_by == request.auth.uid
+        && incoming().created_at == request.time
+        && exists(/databases/$(database)/documents/committees/$(incoming().committee_id))
+        && (isAdmin() || isActiveCommitteeMember(incoming().committee_id));
+      allow update: if isValidId(galleryId)
+        && isValidGallery(incoming())
+        && incoming().committee_id == existing().committee_id
+        && incoming().created_by == existing().created_by
+        && incoming().created_at == existing().created_at
+        && incoming().diff(existing()).affectedKeys().hasOnly(['caption', 'image_url'])
+        && (isAdmin() || isActiveCommitteeMember(existing().committee_id));
+      allow delete: if isValidId(galleryId)
+        && (isAdmin() || isActiveCommitteeMember(existing().committee_id));
+    }
+
+    // Private Committee Documents (Strict isolation: Students have zero access; members only own committee)
+    match /documents/{documentId} {
+      allow get: if isValidId(documentId)
+        && (isAdmin() || isActiveCommitteeMember(existing().committee_id));
+      allow list: if isSignedIn() && (isAdmin() || isActiveCommitteeMember(resource.data.committee_id));
+      allow create: if isValidId(documentId)
+        && isValidDocument(incoming())
+        && incoming().created_by == request.auth.uid
+        && incoming().created_at == request.time
+        && exists(/databases/$(database)/documents/committees/$(incoming().committee_id))
+        && (isAdmin() || isActiveCommitteeMember(incoming().committee_id));
+      allow update: if isValidId(documentId)
+        && isValidDocument(incoming())
+        && incoming().committee_id == existing().committee_id
+        && incoming().created_by == existing().created_by
+        && incoming().created_at == existing().created_at
+        && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'file_url', 'file_name'])
+        && (isAdmin() || isActiveCommitteeMember(existing().committee_id));
+      allow delete: if isValidId(documentId)
+        && (isAdmin() || isActiveCommitteeMember(existing().committee_id));
+    }
+
+    // Login Audit Logs (Every active user writes own log on login; ONLY Admin can read)
+    match /loginLogs/{logId} {
+      allow get: if isValidId(logId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(logId)
+        && isSignedIn()
+        && isValidLoginLog(incoming())
+        && incoming().userId == request.auth.uid
+        && incoming().loggedInAt == request.time
+        && isActiveUser()
+        && (incoming().role == userDoc().role || (incoming().role == 'committee' && userDoc().role == 'committee_member'));
+      allow update, delete: if false;
+    }
+  }
+}

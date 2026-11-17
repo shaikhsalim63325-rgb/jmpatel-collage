@@ -1,0 +1,6 @@
+{
+  "name": "J.M. Patel College — Campus & Committees Portal",
+  "description": "Official progressive web portal for J.M. Patel College featuring all 17 academic, cultural, and student committees, notices, events, gallery, and role-based administration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
